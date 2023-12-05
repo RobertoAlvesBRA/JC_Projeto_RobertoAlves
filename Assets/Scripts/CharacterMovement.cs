@@ -2,6 +2,7 @@ using KinematicCharacterController;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public struct CharacterMovementInput
 {
@@ -14,11 +15,15 @@ public struct CharacterMovementInput
 public class CharacterMovement : MonoBehaviour, ICharacterController
 {
     public KinematicCharacterMotor motor;
+    [Header("Fator Exito - Derrota")]
+    private int inimigosMortos = 0;
+    [SerializeField] private int vida = 10;
 
     [Header("Animator")]
     [SerializeField] Animator anim;
 
     [Header("Movimento - Terra")]
+    [SerializeField] private float velocidadeCorrendo;
     [SerializeField] private float maxSpeed;
     [SerializeField] private float acceleration;
     [SerializeField] private float rotationSpeed;
@@ -40,7 +45,9 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
 
     [SerializeField] private float jumpForce => Mathf.Sqrt(2 * gravity * jumpHeight);
 
-    private bool isJump, isWalk, isAttack;
+    public int InimigosMortos { get => inimigosMortos; set => inimigosMortos = value; }
+
+    private bool isJump, isWalk, isAttack, isRun;
 
     [Header("Atirar")]
     [SerializeField] private Transform spawn;
@@ -48,12 +55,22 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
     [SerializeField] private List<GameObject> flechas;
     public Queue<GameObject> flecha = new Queue<GameObject>();
 
+    
+    private float velocidadeNormal;
+    private bool isDied = false;
+
+
 
     private void Awake()
     {
+        PlayerPrefs.SetInt("isDead", 0);
         isJump = false;
         isWalk = false;
         isAttack = false;
+        isRun = false;
+       
+        velocidadeNormal = maxSpeed;
+
         motor.CharacterController = this;
         foreach(GameObject obj in flechas)
         {
@@ -64,7 +81,7 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
     void Update()
     {
         UpdateAnimator();
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0) && !isAttack)
         {
             StartCoroutine(Bullet());
         }
@@ -73,7 +90,7 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
     public void SetInput(in CharacterMovementInput input)
     {
         moveInput = Vector3.zero;
-        if(input.MoveInput != Vector2.zero)
+        if(input.MoveInput != Vector2.zero && !isDied)
         {
             moveInput = new Vector3(input.MoveInput.x, y: 0, input.MoveInput.y);
             moveInput = input.LookRotation * moveInput;
@@ -81,7 +98,7 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
             moveInput.Normalize();
         }
 
-        if(input.WantsToJump)
+        if(input.WantsToJump && !isDied)
         {
             jumpRequestExpireTime = Time.time + JumpRequestDuration;
             //WantsToJump = input.WantsToJump;
@@ -90,21 +107,33 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
 
     public void UpdateRotation(ref Quaternion currentRotation, float deltaTime)
     {
-        if (moveInput != Vector3.zero)
+        if (moveInput != Vector3.zero && !isDied)
         {
             isWalk = true;
+            if(Input.GetKey(KeyCode.LeftShift))
+            {
+                maxSpeed = velocidadeCorrendo;
+                isRun = true;
+            }
+            else
+            {
+                maxSpeed = velocidadeNormal;
+                isRun = false;
+            }
             var targetRotation = Quaternion.LookRotation(moveInput);
             currentRotation = Quaternion.Slerp(currentRotation, targetRotation, rotationSpeed * deltaTime);
         }
         else
         {
+            isRun = false;
             isWalk = false;
+            maxSpeed = velocidadeNormal;
         }
     }
 
     public void UpdateVelocity(ref Vector3 currentVelocity, float deltaTime)
     {
-        if(motor.GroundingStatus.IsStableOnGround)
+        if(motor.GroundingStatus.IsStableOnGround && !isDied)
         {
             var targetVelocity = moveInput * maxSpeed;
             currentVelocity = Vector3.MoveTowards(currentVelocity, targetVelocity, acceleration * deltaTime);
@@ -145,6 +174,7 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
         anim.SetBool("isJump", isJump);
         anim.SetBool("isWalk", isWalk);
         anim.SetBool("isAttack", isAttack);
+        anim.SetBool("isRun", isRun);
     }
 
     public IEnumerator Bullet()
@@ -165,6 +195,35 @@ public class CharacterMovement : MonoBehaviour, ICharacterController
         //transform.eulerAngles += new Vector3(0, -45, 0);
 
         
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if(other.tag == "DanoZ" && !isDied)
+        {
+            Debug.Log("Levei dano");
+            vida--;
+            if (vida<=0 && !isDied)
+            {
+                isDied = true;
+                anim.Play("Player_Death", 0);
+                StartCoroutine(RestartCena());
+                PlayerPrefs.SetInt("isDead", 1);
+            }
+        }
+    }
+
+    IEnumerator RestartCena()
+    {
+        yield return new WaitForSeconds(10f);
+        SceneManager.LoadScene(0);
+    }
+
+    public void AlterarColisor()
+    {
+        motor.SetCapsuleDimensions(0.25f, 0.5f, 1f);
+        gameObject.tag = "Untagged";
+        gameObject.layer = 11;
     }
 
     #region SemUso

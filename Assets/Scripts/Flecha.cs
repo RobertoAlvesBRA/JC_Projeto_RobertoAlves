@@ -7,20 +7,6 @@ public class Flecha : MonoBehaviour
     [SerializeField] private float tempoDeVida;
     [SerializeField] private CharacterMovement character;
 
-    //private void OnEnable()
-    //{
-    //    character.flecha.Enqueue(this.gameObject);
-    //    Debug.Log(character.flecha.Peek().name);
-    //    //StartCoroutine(DesativarFlecha());
-    //}
-
-    //private void OnDisable()
-    //{
-    //    //character.flecha.Enqueue(this.gameObject);
-    //    character.flecha.Enqueue(this.gameObject);
-    //    Debug.Log(character.flecha.Peek().name);
-    //}
-
     public void Desativar()
     {
         StartCoroutine(DesativarFlecha());
